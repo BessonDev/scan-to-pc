@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn>=0.34
+websockets>=14
+pyautogui>=0.9.54
+pyperclip>=1.9
+cryptography>=44
+qrcode>=8
+pystray>=0.19
+Pillow>=10

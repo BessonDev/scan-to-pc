@@ -1,0 +1,8 @@
+.venv/
+certs/
+__pycache__/
+*.pyc
+build/
+dist/
+*.log
+.atl/

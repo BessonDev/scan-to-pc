@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17191A">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/favicon.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<title>scan-to-pc</title>
+<style>
+  :root {
+    --bg: #17191A;
+    --panel: #212426;
+    --panel-2: #2A2E31;
+    --ink: #F5F4F0;
+    --muted: #8A9096;
+    --line: #33383B;
+    --accent: #FF6B1A;
+    --live: #4ADE80;
+    --danger: #F87171;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 0 14px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 16px;
+  }
+
+  .brand {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .brand::before {
+    content: "";
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    background: var(--accent);
+    margin-right: 8px;
+    transform: rotate(45deg);
+  }
+
+  .conn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .conn .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+
+  .conn.on { color: var(--ink); }
+  .conn.on .dot { background: var(--live); box-shadow: 0 0 6px var(--live); }
+
+  .viewfinder {
+    position: relative;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    aspect-ratio: 1 / 1;
+    display: grid;
+    place-items: center;
+  }
+
+  #reader, #reader video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  #reader:empty::after {
+    content: "Cámara apagada";
+    position: absolute;
+    color: #555;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .beam {
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    top: 50%;
+    height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 12px 2px rgba(255, 107, 26, 0.55);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .viewfinder.scanning .beam {
+    opacity: 1;
+    animation: sweep 2.4s ease-in-out infinite alternate;
+  }
+
+  @keyframes sweep {
+    from { transform: translateY(-90px); }
+    to   { transform: translateY(90px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .viewfinder.scanning .beam { animation: none; top: 12%; opacity: 0.7; }
+    .stamp { animation: none !important; }
+  }
+
+  .cam-error {
+    position: absolute;
+    inset: 0;
+    display: none;
+    place-items: center;
+    text-align: center;
+    padding: 24px;
+    background: rgba(23, 25, 26, 0.92);
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .cam-error.show { display: grid; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  button.primary {
+    flex: 1;
+    appearance: none;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #17191A;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+    padding: 13px 16px;
+    cursor: pointer;
+  }
+
+  button.primary:hover { filter: brightness(1.08); }
+  button.primary:active { transform: translateY(1px); }
+
+  button.ghost {
+    flex: 1;
+    appearance: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 13px 16px;
+    cursor: pointer;
+  }
+
+  button.ghost:hover { border-color: var(--muted); }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .latest {
+    margin-top: 22px;
+    padding: 18px 16px 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  .latest .label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .latest .code {
+    font-family: var(--mono);
+    font-size: clamp(1.6rem, 7vw, 2.4rem);
+    font-weight: 650;
+    letter-spacing: -0.03em;
+    word-break: break-all;
+    min-height: 1.2em;
+  }
+
+  .latest .code.empty {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+
+  .latest .code.stamp { animation: stamp 180ms ease-out; }
+
+  @keyframes stamp {
+    from { transform: scale(1.05); opacity: 0.4; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  .latest .state {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    min-height: 1.3em;
+  }
+
+  .latest .state.ok { color: var(--live); }
+  .latest .state.err { color: var(--danger); }
+
+  .settings {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+
+  .settings label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .settings input[type="checkbox"] {
+    appearance: none;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .settings input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: transform 0.15s, background 0.15s;
+  }
+
+  .settings input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .settings input[type="checkbox"]:checked::after {
+    transform: translateX(16px);
+    background: #17191A;
+  }
+
+  .settings .delay {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+  }
+
+  .settings input[type="number"] {
+    width: 58px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 5px 7px;
+  }
+
+  h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 22px 0 8px;
+  }
+
+  ul#history {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  ul#history li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 2px;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+
+  ul#history .status {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--muted);
+  }
+
+  ul#history li.sent .status { background: var(--live); }
+  ul#history li.error .status { background: var(--danger); }
+  ul#history li.pending .status { background: var(--accent); }
+
+  ul#history .item-code {
+    flex: 1;
+    word-break: break-all;
+  }
+
+  ul#history .meta {
+    color: var(--muted);
+    font-size: 12px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  ul#history .meta .why {
+    display: block;
+    color: var(--danger);
+  }
+
+  button.qr-btn {
+    flex: 0 0 auto;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .modal[hidden] { display: none; }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 11, 12, 0.82);
+  }
+
+  .modal-card {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 24px 20px 20px;
+    max-width: 340px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 6px 8px;
+  }
+
+  .modal-close:hover { color: var(--ink); }
+
+  .modal-card h2 {
+    margin: 0 0 6px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .modal-card .hint {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .modal-card img {
+    display: block;
+    margin: 0 auto;
+    width: 240px;
+    height: 240px;
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px;
+  }
+
+  .modal-card .qr-url {
+    margin: 14px 0 0;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="brand">scan-to-pc</span>
+    <span class="conn" id="conn" role="status" aria-live="polite">
+      <span class="dot"></span><span id="connText">Sin conexión</span>
+    </span>
+  </header>
+
+  <div class="viewfinder" id="viewfinder">
+    <div id="reader"></div>
+    <div class="beam"></div>
+    <div class="cam-error" id="camError"></div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="camBtn">Iniciar cámara</button>
+    <button class="ghost qr-btn" id="qrBtn" aria-haspopup="dialog">QR</button>
+  </div>
+
+  <section class="latest" aria-live="polite">
+    <div class="label">Último código</div>
+    <div class="code empty" id="latestCode">Apunta un código de barras o QR para empezar</div>
+    <div class="state" id="latestState"></div>
+  </section>
+
+  <div class="settings">
+    <label>
+      <input type="checkbox" id="enterToggle" checked>
+      Enter al enviar
+    </label>
+    <span class="delay">
+      <label for="delayInput">Retraso</label>
+      <input type="number" id="delayInput" min="0" max="5" step="0.1" value="0.5"> s
+    </span>
+  </div>
+
+  <h2>Historial</h2>
+  <ul id="history"></ul>
+</div>
+
+<div class="modal" id="qrModal" role="dialog" aria-modal="true" aria-labelledby="qrTitle" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card">
+    <button class="modal-close" id="qrClose" aria-label="Cerrar">&times;</button>
+    <h2 id="qrTitle">Conecta el teléfono</h2>
+    <p class="hint">Escanea este código con la cámara del teléfono para abrir el lector.</p>
+    <img id="qrImg" alt="Código QR con la dirección del lector" width="240" height="240">
+    <p class="qr-url" id="qrUrl"></p>
+  </div>
+</div>
+
+<script src="/static/html5-qrcode.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const viewfinder = $("viewfinder");
+  const camBtn = $("camBtn");
+  const camError = $("camError");
+  const conn = $("conn");
+  const connText = $("connText");
+  const latestCode = $("latestCode");
+  const latestState = $("latestState");
+  const enterToggle = $("enterToggle");
+  const delayInput = $("delayInput");
+  const historyEl = $("history");
+  const qrBtn = $("qrBtn");
+  const qrModal = $("qrModal");
+  const qrImg = $("qrImg");
+  const qrUrl = $("qrUrl");
+  const qrClose = $("qrClose");
+
+  function openQrModal() {
+    qrModal.hidden = false;
+    qrClose.focus();
+    if (!qrImg.getAttribute("src")) {
+      qrImg.src = "/api/qr";
+      fetch("/api/info")
+        .then((r) => r.json())
+        .then((d) => { qrUrl.textContent = d.url; })
+        .catch(() => { qrUrl.textContent = "No se pudo leer la dirección"; });
+    }
+  }
+
+  function closeQrModal() {
+    qrModal.hidden = true;
+    qrBtn.focus();
+  }
+
+  qrBtn.addEventListener("click", openQrModal);
+  qrClose.addEventListener("click", closeQrModal);
+  qrModal.querySelector("[data-close]").addEventListener("click", closeQrModal);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !qrModal.hidden) closeQrModal();
+  });
+
+  enterToggle.checked = localStorage.getItem("enter") !== "0";
+  delayInput.value = localStorage.getItem("delay") || "0.5";
+  enterToggle.addEventListener("change", () =>
+    localStorage.setItem("enter", enterToggle.checked ? "1" : "0"));
+  delayInput.addEventListener("change", () =>
+    localStorage.setItem("delay", delayInput.value));
+
+  const DEBOUNCE_MS = 1500;
+  let lastCode = "";
+  let lastAt = 0;
+  let scanning = false;
+  let ws = null;
+  let retryMs = 1000;
+  const pending = new Map();
+  const MAX_HISTORY = 50;
+
+  const scanner = new Html5Qrcode("reader", {
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.CODE_93,
+      Html5QrcodeSupportedFormats.ITF14,
+      Html5QrcodeSupportedFormats.CODABAR,
+    ],
+    verbose: false,
+  });
+
+  let audioCtx = null;
+  function beep(freq, ms) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = freq;
+      osc.type = "square";
+      gain.gain.value = 0.05;
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + ms / 1000);
+    } catch (_) {}
+  }
+
+  function setConn(on) {
+    conn.classList.toggle("on", on);
+    connText.textContent = on ? "Conectado" : "Sin conexión";
+  }
+
+  function connect() {
+    ws = new WebSocket(`wss://${location.host}/ws`);
+    ws.onopen = () => {
+      setConn(true);
+      retryMs = 1000;
+    };
+    ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (_) { return; }
+      const item = msg.id != null ? pending.get(String(msg.id)) : null;
+      if (!item) return;
+      pending.delete(String(msg.id));
+      item.el.classList.remove("pending");
+      item.el.classList.add(msg.ok ? "sent" : "error");
+      if (!msg.ok) {
+        item.meta.innerHTML = `Error<span class="why">${msg.error || "fallo al escribir"}</span>`;
+      }
+      if (item.isLatest) {
+        latestState.textContent = msg.ok ? "Enviado a la PC" : `Error: ${msg.error || "no se pudo escribir"}`;
+        latestState.className = "state " + (msg.ok ? "ok" : "err");
+      }
+    };
+    ws.onclose = () => {
+      setConn(false);
+      setTimeout(connect, retryMs);
+      retryMs = Math.min(retryMs * 1.6, 5000);
+    };
+    ws.onerror = () => ws.close();
+  }
+  connect();
+
+  function now() {
+    return new Date().toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+
+  function send(code) {
+    const id = String(Date.now()) + Math.random().toString(36).slice(2, 7);
+    const li = document.createElement("li");
+    li.className = "pending";
+    const status = document.createElement("span");
+    status.className = "status";
+    const codeSpan = document.createElement("span");
+    codeSpan.className = "item-code";
+    codeSpan.textContent = code;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    meta.textContent = now();
+    li.append(status, codeSpan, meta);
+    historyEl.prepend(li);
+    while (historyEl.children.length > MAX_HISTORY) historyEl.lastChild.remove();
+
+    pending.set(id, { el: li, meta, isLatest: true });
+
+    latestCode.textContent = code;
+    latestCode.classList.remove("empty", "stamp");
+    void latestCode.offsetWidth;
+    latestCode.classList.add("stamp");
+    latestState.textContent = "Enviando…";
+    latestState.className = "state";
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        id,
+        code,
+        enter: enterToggle.checked,
+        delay: Math.max(0, Math.min(5, parseFloat(delayInput.value) || 0)),
+      }));
+      beep(1100, 60);
+      if (navigator.vibrate) navigator.vibrate(70);
+    } else {
+      pending.delete(id);
+      li.classList.remove("pending");
+      li.classList.add("error");
+      meta.innerHTML = `Sin conexión<span class="why">no se envió</span>`;
+      latestState.textContent = "Sin conexión con la PC — reintenta";
+      latestState.className = "state err";
+      beep(300, 140);
+    }
+  }
+
+  function onScan(text) {
+    const t = Date.now();
+    if (text === lastCode && t - lastAt < DEBOUNCE_MS) return;
+    lastCode = text;
+    lastAt = t;
+    send(text);
+  }
+
+  camBtn.addEventListener("click", async () => {
+    camError.classList.remove("show");
+    if (scanning) {
+      try { await scanner.stop(); } catch (_) {}
+      scanning = false;
+      viewfinder.classList.remove("scanning");
+      camBtn.textContent = "Iniciar cámara";
+      camBtn.className = "primary";
+      return;
+    }
+    camBtn.textContent = "Abriendo cámara…";
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: (w, h) => {
+            const s = Math.floor(Math.min(w, h) * 0.72);
+            return { width: s, height: s };
+          },
+        },
+        onScan,
+        () => {}
+      );
+      scanning = true;
+      viewfinder.classList.add("scanning");
+      camBtn.textContent = "Detener cámara";
+      camBtn.className = "ghost";
+    } catch (err) {
+      camBtn.textContent = "Iniciar cámara";
+      camError.textContent =
+        /denied|not allowed/i.test(String(err))
+          ? "Permiso de cámara denegado. Revisa los permisos del sitio en los ajustes del navegador."
+          : "No se pudo usar la cámara: " + (err && err.message ? err.message : err);
+      camError.classList.add("show");
+    }
+  });
+})();
+</script>
+</body>
+</html>
