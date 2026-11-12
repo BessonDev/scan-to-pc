@@ -73,7 +73,8 @@ El `.spec` ya incluye el frontend (`static/`), el ícono, y los hidden imports d
 | Enter estándar | ON por defecto; se apaga desde el teléfono |
 | Retraso configurable | 0–5 s antes de tipear (default 0.5 s) |
 | Debounce | El mismo código no se reenvía en 1,5 s |
-| Feedback | Beep + vibración + estado "Enviado" en el historial |
+| Sonido | Beep de 2 kHz al escanear, con toggle en la app |
+| Feedback | Beep + vibración (Android) + estado "Enviado" en el historial |
 | Bandeja | Abrir en navegador / Salir |
 | QR en la app | Modal con la dirección para emparejar otro teléfono |
 | HTTPS local | Certificado autofirmado autogenerado en `certs/` |
@@ -96,7 +97,8 @@ El `.spec` ya incluye el frontend (`static/`), el ícono, y los hidden imports d
 │ 7501234567890              │
 │ Enviado a la PC            │
 │                            │
-│ ☑ Enter al enviar  Retraso │
+│ ☑ Enter al enviar  ☑ Sonido│
+│ Retraso 0.5 s              │
 │ Historial                  │
 │ 7501234567890        12:03 │
 └────────────────────────────┘
@@ -123,6 +125,8 @@ El `.spec` ya incluye el frontend (`static/`), el ícono, y los hidden imports d
 | Cámara bloqueada | Página sin contexto seguro o permiso denegado | Aceptar el certificado autofirmado; permiso del sitio en el navegador |
 | Aparece "Sin conexión" | El servidor no está corriendo | Abre el exe de nuevo; revisa la bandeja |
 | No escribe en la PC | Ventana sin foco o delay 0 | Clic en la ventana destino; subir el retraso en el teléfono |
+| No suena el beep (iPhone) | El navegador bloquea el audio hasta el primer toque | Toca **Iniciar cámara** una vez: eso desbloquea el audio. Si sigue mudo, revisa el switch físico de silencio |
+| El beep suena pero no vibra | iOS no soporta vibración por web | Es normal: la vibración solo funciona en Android |
 | Código repetido | Debounce apagado / escaneo muy lento | Normal: 1,5 s entre envíos del mismo código |
 
 ---
