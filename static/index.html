@@ -565,7 +565,7 @@
   soundToggle.addEventListener("change", () => {
     localStorage.setItem("sound", soundToggle.checked ? "1" : "0");
     if (soundToggle.checked) {
-      unlockAudio();
+      unlockAudio(true);
       beep("ok");
     }
   });
@@ -596,11 +596,45 @@
   });
 
   let audioCtx = null;
+  let scanBuf = null;
+  let scanBufPromise = null;
+  let scanGain = null;
+  const SCAN_SND = "/static/beep-sound.mp3";
 
-  function unlockAudio() {
+  function ensureAudioCtx() {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function ensureScanSound() {
+    if (scanBufPromise) return scanBufPromise;
     try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+      const ctx = ensureAudioCtx();
+      if (!scanGain) {
+        scanGain = ctx.createGain();
+        scanGain.gain.value = 1.5;
+        scanGain.connect(ctx.destination);
+      }
+      scanBufPromise = fetch(SCAN_SND)
+        .then((r) => r.arrayBuffer())
+        .then((ab) => ctx.decodeAudioData(ab))
+        .then((buf) => {
+          scanBuf = buf;
+        })
+        .catch(() => {
+          scanBufPromise = null;
+        });
+    } catch (_) {
+      scanBufPromise = null;
+    }
+    return scanBufPromise;
+  }
+
+  function unlockAudio(fromGesture) {
+    try {
+      const ctx = ensureAudioCtx();
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      if (fromGesture) ensureScanSound();
     } catch (_) {}
   }
 
@@ -617,26 +651,39 @@
     osc.stop(startAt + ms / 1000 + 0.02);
   }
 
-  function playTones(kind) {
-    if (!audioCtx || audioCtx.state !== "running") return;
-    const t = audioCtx.currentTime;
-    if (kind === "error") {
-      tone(400, 90, t, 0.07);
-      tone(400, 90, t + 0.13, 0.07);
-    } else {
-      tone(2000, 70, t, 0.09);
+  function playScan() {
+    if (!scanBuf || !audioCtx) return;
+    try {
+      const src = audioCtx.createBufferSource();
+      src.buffer = scanBuf;
+      src.connect(scanGain);
+      src.start(0);
+    } catch (_) {}
+  }
+
+  function playErrorTone() {
+    if (!audioCtx || audioCtx.state !== "running") {
+      if (audioCtx) audioCtx.resume().then(playErrorTone).catch(() => {});
+      return;
     }
+    const t = audioCtx.currentTime;
+    tone(400, 90, t, 0.07);
+    tone(400, 90, t + 0.13, 0.07);
   }
 
   function beep(kind) {
     if (!soundToggle.checked) return;
     try {
-      unlockAudio();
-      if (!audioCtx) return;
+      unlockAudio(false);
+      if (kind !== "ok") {
+        playErrorTone();
+        return;
+      }
+      const go = () => ensureScanSound().then(() => playScan());
       if (audioCtx.state === "running") {
-        playTones(kind);
+        go();
       } else {
-        audioCtx.resume().then(() => playTones(kind)).catch(() => {});
+        audioCtx.resume().then(go).catch(() => {});
       }
     } catch (_) {}
   }
@@ -644,7 +691,7 @@
   document.addEventListener(
     "pointerdown",
     () => {
-      unlockAudio();
+      unlockAudio(true);
     },
     { once: true, passive: true }
   );

@@ -73,7 +73,7 @@ El `.spec` ya incluye el frontend (`static/`), el ícono, y los hidden imports d
 | Enter estándar | ON por defecto; se apaga desde el teléfono |
 | Retraso configurable | 0–5 s antes de tipear (default 0.5 s) |
 | Debounce | El mismo código no se reenvía en 1,5 s |
-| Sonido | Beep de 2 kHz al escanear, con toggle en la app |
+| Sonido | Beep MP3 personalizado (`static/beep-sound.mp3`), con boost x1.5 y toggle en la app |
 | Feedback | Beep + vibración (Android) + estado "Enviado" en el historial |
 | Bandeja | Abrir en navegador / Salir |
 | QR en la app | Modal con la dirección para emparejar otro teléfono |
